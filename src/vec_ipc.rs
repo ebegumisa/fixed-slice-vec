@@ -7,11 +7,16 @@ use core::iter::Extend;
 use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut};
 
+use zerocopy::{KnownLayout, Immutable};
+
 /// Vec-like structure backed by a storage slice of possibly uninitialized data.
 ///
 /// The maximum length (the capacity) is fixed at runtime to the length of the
 /// provided storage slice.
-pub struct FixedSliceVec<'a, T: Sized> {
+pub struct FixedSliceVec<'a, T: Sized> 
+where
+    T: KnownLayout + Immutable,
+{
     /// Backing storage, provides capacity
     storage: &'a mut [MaybeUninit<T>],
     /// The number of items that have been
@@ -19,13 +24,19 @@ pub struct FixedSliceVec<'a, T: Sized> {
     len: usize,
 }
 
-impl<'a, T: Sized> Drop for FixedSliceVec<'a, T> {
+impl<'a, T: Sized> Drop for FixedSliceVec<'a, T>
+where
+    T: KnownLayout + Immutable,
+{
     fn drop(&mut self) {
         self.clear();
     }
 }
 
-impl<'a, T: Sized> FixedSliceVec<'a, T> {
+impl<'a, T: Sized> FixedSliceVec<'a, T>
+where
+    T: KnownLayout + Immutable,
+{
     /// Create a FixedSliceVec backed by a slice of possibly-uninitialized data.
     /// The backing storage slice is used as capacity for Vec-like operations,
     ///
@@ -456,7 +467,10 @@ impl core::fmt::Debug for IndexError {
     }
 }
 
-impl<'a, T: Sized> From<&'a mut [MaybeUninit<T>]> for FixedSliceVec<'a, T> {
+impl<'a, T: Sized> From<&'a mut [MaybeUninit<T>]> for FixedSliceVec<'a, T>
+where
+    T: KnownLayout + Immutable,
+{
     #[inline]
     fn from(v: &'a mut [MaybeUninit<T>]) -> Self {
         FixedSliceVec { storage: v, len: 0 }
@@ -466,6 +480,7 @@ impl<'a, T: Sized> From<&'a mut [MaybeUninit<T>]> for FixedSliceVec<'a, T> {
 impl<'a, T: Sized> Hash for FixedSliceVec<'a, T>
 where
     T: Hash,
+    T: KnownLayout + Immutable,
 {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -476,6 +491,7 @@ where
 impl<'a, T: Sized> PartialEq for FixedSliceVec<'a, T>
 where
     T: PartialEq,
+    T: KnownLayout + Immutable,
 {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
@@ -486,6 +502,7 @@ where
 impl<'a, T: Sized> PartialEq<[T]> for FixedSliceVec<'a, T>
 where
     T: PartialEq,
+    T: KnownLayout + Immutable,
 {
     #[inline]
     fn eq(&self, other: &[T]) -> bool {
@@ -493,30 +510,46 @@ where
     }
 }
 
-impl<'a, T: Sized> Eq for FixedSliceVec<'a, T> where T: Eq {}
+impl<'a, T: Sized> Eq for FixedSliceVec<'a, T>
+where 
+    T: Eq,
+    T: KnownLayout + Immutable,
+{}
 
-impl<'a, T: Sized> Borrow<[T]> for FixedSliceVec<'a, T> {
+impl<'a, T: Sized> Borrow<[T]> for FixedSliceVec<'a, T>
+where
+    T: KnownLayout + Immutable,
+{
     #[inline]
     fn borrow(&self) -> &[T] {
         self
     }
 }
 
-impl<'a, T: Sized> BorrowMut<[T]> for FixedSliceVec<'a, T> {
+impl<'a, T: Sized> BorrowMut<[T]> for FixedSliceVec<'a, T>
+where
+    T: KnownLayout + Immutable,
+{
     #[inline]
     fn borrow_mut(&mut self) -> &mut [T] {
         self
     }
 }
 
-impl<'a, T: Sized> AsRef<[T]> for FixedSliceVec<'a, T> {
+impl<'a, T: Sized> AsRef<[T]> for FixedSliceVec<'a, T>
+where
+    T: KnownLayout + Immutable,
+{
     #[inline]
     fn as_ref(&self) -> &[T] {
         self
     }
 }
 
-impl<'a, T: Sized> AsMut<[T]> for FixedSliceVec<'a, T> {
+impl<'a, T: Sized> AsMut<[T]> for FixedSliceVec<'a, T>
+where
+    T: KnownLayout + Immutable,
+{
     #[inline]
     fn as_mut(&mut self) -> &mut [T] {
         self
@@ -526,6 +559,7 @@ impl<'a, T: Sized> AsMut<[T]> for FixedSliceVec<'a, T> {
 impl<'a, T: Sized> core::fmt::Debug for FixedSliceVec<'a, T>
 where
     T: core::fmt::Debug,
+    T: KnownLayout + Immutable,
 {
     #[inline]
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
@@ -536,6 +570,7 @@ where
 impl<'a, T: Sized> PartialOrd for FixedSliceVec<'a, T>
 where
     T: PartialOrd,
+    T: KnownLayout + Immutable,
 {
     #[inline]
     fn partial_cmp(&self, other: &FixedSliceVec<'a, T>) -> Option<core::cmp::Ordering> {
@@ -563,7 +598,10 @@ where
     }
 }
 
-impl<'a, T: Sized> Deref for FixedSliceVec<'a, T> {
+impl<'a, T: Sized> Deref for FixedSliceVec<'a, T>
+where
+    T: KnownLayout + Immutable,
+{
     type Target = [T];
     #[inline]
     fn deref(&self) -> &Self::Target {
@@ -571,7 +609,10 @@ impl<'a, T: Sized> Deref for FixedSliceVec<'a, T> {
     }
 }
 
-impl<'a, T: Sized> DerefMut for FixedSliceVec<'a, T> {
+impl<'a, T: Sized> DerefMut for FixedSliceVec<'a, T>
+where
+    T: KnownLayout + Immutable,
+{
     #[inline]
     fn deref_mut(&mut self) -> &mut [T] {
         unsafe { core::slice::from_raw_parts_mut(self.storage.as_mut_ptr() as *mut T, self.len) }
@@ -585,7 +626,10 @@ impl<'a, T: Sized> DerefMut for FixedSliceVec<'a, T> {
 ///
 /// Use `FixedSliceVec::try_extend` if you require more fine-
 /// grained signal about the outcome of attempted extension.
-impl<'a, T: Sized> Extend<T> for FixedSliceVec<'a, T> {
+impl<'a, T: Sized> Extend<T> for FixedSliceVec<'a, T>
+where
+    T: KnownLayout + Immutable,
+{
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         let _ = self.try_extend(iter);
     }

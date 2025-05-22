@@ -16,6 +16,9 @@ description = "`FixedSliceVec` is a dynamic length Vec with runtime-determined m
 keywords = ["vec", "vector", "no_std", "slice", "no-std"]
 categories = ["embedded", "data-structures", "no-std"]
 
+[dependencies]
+zerocopy = { version = "0.8.25", features = ["derive"] } # LICENSE: Triad MIT/Apache 2/BSD (as at 0.8.25-a591653)
+
 [dev-dependencies]
 arrayvec = "0.5"
 proptest = "0.9.6"
