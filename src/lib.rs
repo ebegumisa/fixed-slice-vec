@@ -86,5 +86,6 @@
 
 pub mod single;
 pub mod vec;
+pub mod vec_ipc;
 
 pub use crate::vec::*;
