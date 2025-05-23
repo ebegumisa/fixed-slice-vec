@@ -44,6 +44,10 @@ where
     /// The initial length of the FixedSliceVec is 0.
     #[inline]
     pub fn new(storage: &'a mut [MaybeUninit<T>], len: &'a mut MaybeUninit<usize>) -> Self {
+        {
+            let len = unsafe { len.as_ptr().read() };
+            assert!(len <= storage.len(), "len {len} exceeds capacity {}", storage.len());
+        }
         FixedSliceVec { storage, len }
     }
 
@@ -127,6 +131,10 @@ where
         assert_eq!((0, 1, 0), (empty_prefix.len(), len.len(), empty_suffix.len()),
                     "len_bytes buffer too small");
         let len = &mut len[0];
+        {
+            let len = unsafe { len.as_ptr().read() };
+            assert!(len <= storage.len(), "len {len} exceeds capacity {}", storage.len());
+        }
         
         (storage_prefix, FixedSliceVec { storage, len }, storage_suffix, len_prefix, len_suffix)
     }
@@ -168,6 +176,10 @@ where
         assert_eq!((0, 1, 0), (empty_prefix.len(), len.len(), empty_suffix.len()),
                     "len_bytes buffer too small");
         let len = &mut len[0];
+        {
+            let len = unsafe { len.as_ptr().read() };
+            assert!(len <= storage.len(), "len {len} exceeds capacity {}", storage.len());
+        }
         
         (storage_prefix, FixedSliceVec { storage, len }, storage_suffix, len_prefix, len_suffix)
     }
@@ -518,7 +530,7 @@ where
 {
     #[inline]
     fn from(v: (&'a mut [MaybeUninit<T>], &'a mut MaybeUninit<usize>)) -> Self {
-        FixedSliceVec { storage: v.0, len: v.1 }
+        FixedSliceVec::new(v.0, v.1)
     }
 }
 
