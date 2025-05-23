@@ -56,9 +56,13 @@ where
     /// either side of the carved-out FixedSliceVec buffer, consider using `align_from_bytes` instead:
     ///
     /// ```
-    /// # let mut bytes = [3u8, 1, 4, 1, 5, 9];
-    /// let vec = unsafe { fixed_slice_vec::FixedSliceVec::from_bytes(&mut bytes[..]) };
-    /// # let vec: fixed_slice_vec::FixedSliceVec<u16> = vec;
+    /// let mut storage_bytes = [3u8, 1, 4, 1, 5, 9];
+    /// let mut len_bytes = 3_usize.to_ne_bytes();
+    /// let vec = unsafe { 
+    ///     fixed_slice_vec::vec_ipc::FixedSliceVec::from_bytes(&mut storage_bytes[..], &mut len_bytes) 
+    /// };
+    /// let vec: fixed_slice_vec::vec_ipc::FixedSliceVec<u16> = vec;
+    /// assert_eq!(vec.len(), 3);
     /// ```
     ///
     /// The bytes are treated as if they might be uninitialized, so even if `T` is `u8`,
@@ -97,9 +101,13 @@ where
     /// either side of the carved-out FixedSliceVec.
     ///
     /// ```
-    /// let mut bytes = [3u8, 1, 4, 1, 5, 9];
-    /// let (prefix, vec, suffix) = unsafe { fixed_slice_vec::FixedSliceVec::align_from_bytes(&mut bytes[..]) };
-    /// let vec: fixed_slice_vec::FixedSliceVec<u16> = vec;
+    /// let mut storage_bytes = [3u8, 1, 4, 1, 5, 9];
+    /// let mut len_bytes = 3_usize.to_ne_bytes();
+    /// let (storage_prefix, vec, storage_suffix, len_prefix, len_suffix) = unsafe { 
+    ///     fixed_slice_vec::vec_ipc::FixedSliceVec::align_from_bytes(&mut storage_bytes[..], &mut len_bytes)
+    /// };
+    /// let vec: fixed_slice_vec::vec_ipc::FixedSliceVec<u16> = vec;
+    /// assert_eq!(vec.len(), 3);
     /// ```
     ///
     /// The bytes are treated as if they might be uninitialized, so even if `T` is `u8`,
@@ -143,10 +151,15 @@ where
     ///
     /// ```
     /// # use core::mem::MaybeUninit;
-    /// let mut bytes: [MaybeUninit<u8>; 15] = unsafe { MaybeUninit::uninit().assume_init() };
-    /// let (prefix, vec, suffix) = fixed_slice_vec::FixedSliceVec::align_from_uninit_bytes(&mut
-    /// bytes[..]);
-    /// let vec: fixed_slice_vec::FixedSliceVec<u16> = vec;
+    /// let mut storage_bytes: [MaybeUninit<u8>; 15] = unsafe { MaybeUninit::uninit().assume_init() };
+    /// let mut len_bytes: [MaybeUninit<u8>; 16] = unsafe { MaybeUninit::uninit().assume_init() };
+    /// for byte in &mut len_bytes {
+    ///     byte.write(0);
+    /// }
+    /// let (storage_prefix, vec, storage_suffix, len_prefix, len_suffix) = 
+    ///     fixed_slice_vec::vec_ipc::FixedSliceVec::align_from_uninit_bytes(
+    ///         &mut storage_bytes[..], &mut len_bytes[..]);
+    /// let vec: fixed_slice_vec::vec_ipc::FixedSliceVec<u16> = vec;
     /// ```
     ///
     /// The length of the returned `FixedSliceVec` will be zero.
@@ -195,7 +208,11 @@ where
     /// ```
     /// use core::mem::MaybeUninit;
     /// let mut storage: [MaybeUninit<u8>; 16] = unsafe { MaybeUninit::uninit().assume_init() };
-    /// let mut x: fixed_slice_vec::FixedSliceVec<u16> = fixed_slice_vec::FixedSliceVec::from_uninit_bytes(&mut storage[..]);
+    /// let mut len: [MaybeUninit<u8>; 16] = unsafe { MaybeUninit::uninit().assume_init() };
+    /// for byte in &mut len {
+    ///      byte.write(0);
+    /// }
+    /// let mut x = fixed_slice_vec::vec_ipc::FixedSliceVec::<u16>::from_uninit_bytes(&mut storage[..], &mut len);
     /// assert!(x.try_extend([1u16, 2, 4, 8].iter().copied()).is_ok());
     /// let size = x.len();
     /// let x_ptr = x.as_mut_ptr();
@@ -232,7 +249,11 @@ where
     /// ```
     /// use core::mem::MaybeUninit;
     /// let mut storage: [MaybeUninit<u8>; 16] = unsafe { MaybeUninit::uninit().assume_init() };
-    /// let mut x: fixed_slice_vec::FixedSliceVec<u16> = fixed_slice_vec::FixedSliceVec::from_uninit_bytes(&mut storage[..]);
+    /// let mut len: [MaybeUninit<u8>; 16] = unsafe { MaybeUninit::uninit().assume_init() };
+    /// for byte in &mut len {
+    ///      byte.write(0);
+    /// }
+    /// let mut x = fixed_slice_vec::vec_ipc::FixedSliceVec::<u16>::from_uninit_bytes(&mut storage[..], &mut len);
     /// x.extend([1u16, 2, 4].iter().copied());
     /// let x_ptr = x.as_ptr();
     ///
