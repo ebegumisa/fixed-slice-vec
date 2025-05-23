@@ -16,12 +16,13 @@ use zerocopy::{KnownLayout, Immutable};
 pub struct FixedSliceVec<'a, T: Sized> 
 where
     T: KnownLayout + Immutable,
+    [MaybeUninit<T>]: KnownLayout + Immutable,
 {
     /// Backing storage, provides capacity
     storage: &'a mut [MaybeUninit<T>],
     /// The number of items that have been
     /// initialized
-    len: usize,
+    len: &'a mut MaybeUninit<usize>,
 }
 
 impl<'a, T: Sized> Drop for FixedSliceVec<'a, T>
@@ -42,8 +43,8 @@ where
     ///
     /// The initial length of the FixedSliceVec is 0.
     #[inline]
-    pub fn new(storage: &'a mut [MaybeUninit<T>]) -> Self {
-        FixedSliceVec { storage, len: 0 }
+    pub fn new(storage: &'a mut [MaybeUninit<T>], len: &'a mut MaybeUninit<usize>) -> Self {
+        FixedSliceVec { storage, len }
     }
 
     /// Create a well-aligned FixedSliceVec backed by a slice of the provided bytes.
@@ -208,9 +209,14 @@ where
 
     /// The length of the FixedSliceVec. The number of initialized
     /// values that have been added to it.
-    #[inline]
+    #[inline(always)]
     pub fn len(&self) -> usize {
-        self.len
+        unsafe { self.len.as_ptr().read() }
+    }
+
+    #[inline(always)]
+    unsafe fn len_mut_ref(&mut self) -> &mut usize {
+        &mut *self.len.as_mut_ptr()
     }
 
     /// The maximum amount of items that can live in this FixedSliceVec
@@ -222,13 +228,13 @@ where
     /// Returns true if there are no items present.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.len == 0
+        self.len() == 0
     }
 
     /// Returns true if the FixedSliceVec is full to capacity.
     #[inline]
     pub fn is_full(&self) -> bool {
-        self.len == self.capacity()
+        self.len() == self.capacity()
     }
 
     /// Attempt to add a value to the FixedSliceVec.
@@ -239,8 +245,8 @@ where
         if self.is_full() {
             return Err(StorageError(value));
         }
-        self.storage[self.len] = MaybeUninit::new(value);
-        self.len += 1;
+        self.storage[self.len()] = MaybeUninit::new(value);
+        unsafe { *self.len_mut_ref() += 1 };
         Ok(())
     }
 
@@ -293,8 +299,8 @@ where
                 if self.is_full() {
                     return Err(iter);
                 } else if let Some(item) = iter.next() {
-                    self.storage[self.len] = MaybeUninit::new(item);
-                    self.len += 1;
+                    self.storage[self.len()] = MaybeUninit::new(item);
+                    unsafe { *self.len_mut_ref() += 1 };
                 } else {
                     unreachable!("`FixedSliceVec::try_extend` peeked above to ensure that `next` would return Some")
                 }
@@ -307,19 +313,19 @@ where
     /// Remove the last item from the FixedSliceVec.
     #[inline]
     pub fn pop(&mut self) -> Option<T> {
-        if self.len == 0 {
+        if self.len() == 0 {
             return None;
         }
-        self.len -= 1;
-        Some(unsafe { self.storage[self.len].as_ptr().read() })
+        unsafe { *self.len_mut_ref() -= 1 };
+        Some(unsafe { self.storage[self.len()].as_ptr().read() })
     }
 
     /// Removes the FixedSliceVec's tracking of all items in it while retaining the
     /// same capacity.
     #[inline]
     pub fn clear(&mut self) {
-        let original_len = self.len;
-        self.len = 0;
+        let original_len = self.len();
+        unsafe { *self.len_mut_ref() = 0 };
         unsafe {
             // Note we cannot use the usual DerefMut helper to produce a slice because it relies
             // on the `len` field, which we have updated above already.
@@ -337,11 +343,11 @@ where
     /// Note that this method has no effect on the capacity of the FixedSliceVec.
     #[inline]
     pub fn truncate(&mut self, len: usize) {
-        let original_len = self.len;
+        let original_len = self.len();
         if len > original_len {
             return;
         }
-        self.len = len;
+        unsafe { *self.len_mut_ref() = len };
         unsafe {
             // Note we cannot use the usual DerefMut helper to produce a slice because it relies
             // on the `len` field, which we have updated above already.
@@ -358,10 +364,10 @@ where
     /// Panics if `index` is out of bounds.
     pub fn remove(&mut self, index: usize) -> T {
         // Error message and overall impl strategy following along with std vec,
-        if index >= self.len {
+        if index >= self.len() {
             panic!(
                 "removal index (is {}) should be < len (is {})",
-                index, self.len
+                index, self.len()
             );
         }
         unsafe { self.unchecked_remove(index) }
@@ -370,7 +376,7 @@ where
     /// Removes and returns the element at position `index` within the FixedSliceVec,
     /// shifting all elements after it to the left.
     pub fn try_remove(&mut self, index: usize) -> Result<T, IndexError> {
-        if index >= self.len {
+        if index >= self.len() {
             return Err(IndexError);
         }
         Ok(unsafe { self.unchecked_remove(index) })
@@ -381,8 +387,8 @@ where
     unsafe fn unchecked_remove(&mut self, index: usize) -> T {
         let ptr = (self.as_mut_ptr() as *mut T).add(index);
         let out = core::ptr::read(ptr);
-        core::ptr::copy(ptr.offset(1), ptr, self.len - index - 1);
-        self.len -= 1;
+        core::ptr::copy(ptr.offset(1), ptr, self.len()- index - 1);
+        unsafe { *self.len_mut_ref() -= 1 };
         out
     }
     /// Removes an element from the vector and returns it.
@@ -395,10 +401,10 @@ where
     ///
     /// Panics if `index` is out of bounds.
     pub fn swap_remove(&mut self, index: usize) -> T {
-        if index >= self.len {
+        if index >= self.len() {
             panic!(
                 "swap_remove index (is {}) should be < len (is {})",
-                index, self.len
+                index, self.len()
             );
         }
         unsafe { self.unchecked_swap_remove(index) }
@@ -409,7 +415,7 @@ where
     ///
     /// This does not preserve ordering, but is O(1).
     pub fn try_swap_remove(&mut self, index: usize) -> Result<T, IndexError> {
-        if index >= self.len {
+        if index >= self.len() {
             return Err(IndexError);
         }
         Ok(unsafe { self.unchecked_swap_remove(index) })
@@ -419,9 +425,9 @@ where
     #[inline]
     unsafe fn unchecked_swap_remove(&mut self, index: usize) -> T {
         let target_ptr = (self.as_mut_ptr() as *mut T).add(index);
-        let end_ptr = (self.as_ptr() as *const T).add(self.len - 1);
+        let end_ptr = (self.as_ptr() as *const T).add(self.len() - 1);
         let end_value = core::ptr::read(end_ptr);
-        self.len -= 1;
+        unsafe { *self.len_mut_ref() -= 1 };
         core::ptr::replace(target_ptr, end_value)
     }
 
@@ -467,13 +473,13 @@ impl core::fmt::Debug for IndexError {
     }
 }
 
-impl<'a, T: Sized> From<&'a mut [MaybeUninit<T>]> for FixedSliceVec<'a, T>
+impl<'a, T: Sized> From<(&'a mut [MaybeUninit<T>], &'a mut MaybeUninit<usize>)> for FixedSliceVec<'a, T>
 where
     T: KnownLayout + Immutable,
 {
     #[inline]
-    fn from(v: &'a mut [MaybeUninit<T>]) -> Self {
-        FixedSliceVec { storage: v, len: 0 }
+    fn from(v: (&'a mut [MaybeUninit<T>], &'a mut MaybeUninit<usize>)) -> Self {
+        FixedSliceVec { storage: v.0, len: v.1 }
     }
 }
 
@@ -605,7 +611,7 @@ where
     type Target = [T];
     #[inline]
     fn deref(&self) -> &Self::Target {
-        unsafe { core::slice::from_raw_parts(self.storage.as_ptr() as *const T, self.len) }
+        unsafe { core::slice::from_raw_parts(self.storage.as_ptr() as *const T, self.len()) }
     }
 }
 
@@ -615,7 +621,7 @@ where
 {
     #[inline]
     fn deref_mut(&mut self) -> &mut [T] {
-        unsafe { core::slice::from_raw_parts_mut(self.storage.as_mut_ptr() as *mut T, self.len) }
+        unsafe { core::slice::from_raw_parts_mut(self.storage.as_mut_ptr() as *mut T, self.len()) }
     }
 }
 
@@ -642,7 +648,8 @@ mod tests {
     #[test]
     fn from_uninit() {
         let mut data: [MaybeUninit<u8>; 32] = unsafe { MaybeUninit::uninit().assume_init() };
-        let mut sv: FixedSliceVec<u8> = (&mut data[..]).into();
+        let mut len: MaybeUninit<usize> = unsafe { MaybeUninit::uninit().assume_init() };
+        let mut sv: FixedSliceVec<u8> = (&mut data[..], &mut len).into();
         assert_eq!(0, sv.len());
         assert_eq!(32, sv.capacity());
         assert!(sv.is_empty());
