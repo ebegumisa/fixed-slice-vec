@@ -116,13 +116,18 @@ where
     ) -> (&'a mut [u8], FixedSliceVec<'a, T>, &'a mut [u8], &'a mut [u8], &'a mut [u8]) {
         let (storage_prefix, storage, storage_suffix) = storage_bytes.align_to_mut();
         
+        assert!(len_bytes.len() >= size_of::<MaybeUninit<usize>>(), "len_bytes buffer too small");
         let len_offset = len_bytes.as_ptr().align_offset(align_of::<MaybeUninit<usize>>());
+        
+        assert!(len_offset + size_of::<MaybeUninit<usize>>() <= len_bytes.len(), 
+                "len_bytes buffer too small");
         let (len_prefix, len_bytes) = len_bytes.split_at_mut(len_offset);
-        let (len, len_suffix) = len_bytes.split_at_mut(size_of::<MaybeUninit<usize>>());
+        let (len, len_suffix) = len_bytes.split_at_mut(size_of::<MaybeUninit<usize>>());        
         let (empty_prefix, len, empty_suffix) = unsafe { len.align_to_mut::<MaybeUninit<usize>>() };
-        assert_eq!((0, 1, 0), (empty_prefix.len(), len.len(), empty_suffix.len()));
+        assert_eq!((0, 1, 0), (empty_prefix.len(), len.len(), empty_suffix.len()),
+                    "len_bytes buffer too small");
         let len = &mut len[0];
-
+        
         (storage_prefix, FixedSliceVec { storage, len }, storage_suffix, len_prefix, len_suffix)
     }
 
@@ -151,14 +156,19 @@ where
         &'a mut [MaybeUninit<u8>],
     ) {
         let (storage_prefix, storage, storage_suffix) = unsafe { storage_bytes.align_to_mut() };
- 
-        let len_offset = len_bytes.as_ptr().align_offset(align_of::<MaybeUninit<usize>>());
-        let (len_prefix, len_bytes) = len_bytes.split_at_mut(len_offset);
-        let (len, len_suffix) = len_bytes.split_at_mut(size_of::<MaybeUninit<usize>>());
-        let (empty_prefix, len, empty_suffix) = unsafe { len.align_to_mut::<MaybeUninit<usize>>() };
-        assert_eq!((0, 1, 0), (empty_prefix.len(), len.len(), empty_suffix.len()));
-        let len = &mut len[0];
 
+        assert!(len_bytes.len() >= size_of::<MaybeUninit<usize>>(), "len_bytes buffer too small");
+        let len_offset = len_bytes.as_ptr().align_offset(align_of::<MaybeUninit<usize>>());
+        
+        assert!(len_offset + size_of::<MaybeUninit<usize>>() <= len_bytes.len(), 
+                "len_bytes buffer too small");
+        let (len_prefix, len_bytes) = len_bytes.split_at_mut(len_offset);
+        let (len, len_suffix) = len_bytes.split_at_mut(size_of::<MaybeUninit<usize>>());        
+        let (empty_prefix, len, empty_suffix) = unsafe { len.align_to_mut::<MaybeUninit<usize>>() };
+        assert_eq!((0, 1, 0), (empty_prefix.len(), len.len(), empty_suffix.len()),
+                    "len_bytes buffer too small");
+        let len = &mut len[0];
+        
         (storage_prefix, FixedSliceVec { storage, len }, storage_suffix, len_prefix, len_suffix)
     }
 
