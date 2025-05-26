@@ -44,7 +44,6 @@ where
     /// The initial length of the FixedSliceVec is 0.
     #[inline]
     pub fn new(storage: &'a mut [MaybeUninit<T>], len: &'a mut MaybeUninit<usize>) -> Self {
-        len.write(0);
         FixedSliceVec { storage, len }
     }
 
@@ -277,18 +276,6 @@ where
         unsafe { self.len.as_ptr().read() }
     }
 
-    #[inline(always)]
-    unsafe fn len_incr(&mut self) {
-        let v = self.len.as_ptr().read();
-        self.len.write(v + 1);
-    }
-
-    #[inline(always)]
-    unsafe fn len_decr(&mut self) {
-        let v = self.len.as_ptr().read();
-        self.len.write(v - 1);
-    }
-
     /// The maximum amount of items that can live in this FixedSliceVec
     #[inline]
     pub fn capacity(&self) -> usize {
@@ -316,7 +303,7 @@ where
             return Err(StorageError(value));
         }
         self.storage[self.len()] = MaybeUninit::new(value);
-        unsafe { self.len_incr() };
+        unsafe { *self.len.as_mut_ptr() += 1 };
         Ok(())
     }
 
@@ -370,7 +357,7 @@ where
                     return Err(iter);
                 } else if let Some(item) = iter.next() {
                     self.storage[self.len()] = MaybeUninit::new(item);
-                    unsafe { self.len_incr() };
+                    unsafe { *self.len.as_mut_ptr() += 1 };
                 } else {
                     unreachable!("`FixedSliceVec::try_extend` peeked above to ensure that `next` would return Some")
                 }
@@ -386,7 +373,7 @@ where
         if self.len() == 0 {
             return None;
         }
-        unsafe { self.len_decr() };
+        unsafe { *self.len.as_mut_ptr() -= 1 };
         Some(unsafe { self.storage[self.len()].as_ptr().read() })
     }
 
@@ -395,7 +382,7 @@ where
     #[inline]
     pub fn clear(&mut self) {
         let original_len = self.len();
-        self.len.write(0);
+        unsafe { *self.len.as_mut_ptr() = 0 };
         unsafe {
             // Note we cannot use the usual DerefMut helper to produce a slice because it relies
             // on the `len` field, which we have updated above already.
@@ -417,7 +404,7 @@ where
         if len > original_len {
             return;
         }
-        self.len.write(len);
+        unsafe { *self.len.as_mut_ptr() = len };
         unsafe {
             // Note we cannot use the usual DerefMut helper to produce a slice because it relies
             // on the `len` field, which we have updated above already.
@@ -458,7 +445,7 @@ where
         let ptr = (self.as_mut_ptr() as *mut T).add(index);
         let out = core::ptr::read(ptr);
         core::ptr::copy(ptr.offset(1), ptr, self.len() - index - 1);
-        unsafe { self.len_decr() };
+        unsafe { *self.len.as_mut_ptr() -= 1 };
         out
     }
     /// Removes an element from the vector and returns it.
@@ -497,7 +484,7 @@ where
         let target_ptr = (self.as_mut_ptr() as *mut T).add(index);
         let end_ptr = (self.as_ptr() as *const T).add(self.len() - 1);
         let end_value = core::ptr::read(end_ptr);
-        unsafe { self.len_decr() };
+        unsafe { *self.len.as_mut_ptr() -= 1 };
         core::ptr::replace(target_ptr, end_value)
     }
 
